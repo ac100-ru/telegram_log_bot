@@ -3,6 +3,16 @@
 define('BOT_TOKEN', '12345678:replace-me-with-real-token');
 define('API_URL', 'https://api.telegram.org/bot'.BOT_TOKEN.'/');
 
+define('WEBHOOK_URL', 'https://my-site.example.com/secret-path-for-webhooks/');
+
+//define('CHAT_ID', -1);
+// This example will save logs to file 'telegram_logs/channel-name_<year>.<week>.txt'
+//define('LOG_PREFIX', 'telegram_logs/channel-name_');
+//define('LOG_FORMAT', 'Y.W\.\t\x\t');
+//define('DATE_FORMAT', 'Y-m-d H:i:s');
+//define('DATETIME_ZONE', 'Europe/Moscow');
+
+
 function apiRequestWebhook($method, $parameters) {
 	if (!is_string($method)) {
 		error_log("Method name must be a string\n");
@@ -113,11 +123,38 @@ function apiRequestJson($method, $parameters) {
 	return exec_curl_request($handle);
 }
 
+function saveMessage($message) {
+	$date = new DateTime(date("r", $message["date"]));
+	if (defined("DATETIME_ZONE"))
+		$date->setTimeZone(new DateTimeZone(DATETIME_ZONE));
+	$s_date = $date->format(DATE_FORMAT);
+
+	$log_file = LOG_PREFIX . $date->format(LOG_FORMAT);
+	if (!file_exists($log_file)) {
+		file_put_contents($log_file, b"\xEF\xBB\xBF");
+	}
+
+	$text = $message['text'];
+	$from = $message['from']['first_name'];
+
+	file_put_contents($log_file, $s_date . ": " . $from . "> " . $text . "\n", FILE_APPEND);
+}
+
 function processMessage($message) {
 	// process incoming message
 	$message_id = $message['message_id'];
 	$chat_id = $message['chat']['id'];
+
+	// Process only specified channel
+	if ($chat_id !== CHAT_ID)
+		return false;
+
 	if (isset($message['text'])) {
+		saveMessage($message);
+
+		// Do not send responses
+		return;
+
 		// incoming text message
 		$text = $message['text'];
 
@@ -139,7 +176,20 @@ function processMessage($message) {
 }
 
 
-define('WEBHOOK_URL', 'https://my-site.example.com/secret-path-for-webhooks/');
+function checkParam($param_name) {
+	if (defined($param_name))
+		return true;
+
+	if (php_sapi_name() == 'cli')
+		echo $param_name . " is not defined.\n";
+	exit;	
+}
+
+checkParam('CHAT_ID');
+checkParam("LOG_PREFIX");
+checkParam("LOG_FORMAT");
+checkParam("DATE_FORMAT");
+
 
 if (php_sapi_name() == 'cli') {
 	// if run from console, set or delete webhook
